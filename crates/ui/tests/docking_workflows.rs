@@ -273,15 +273,19 @@ fn crowded_tab_labels_are_elided_inside_their_tabs() {
         output.textures_delta.clear();
         let tabs: Vec<Rect> = panels.iter().filter_map(|p| ctx.read_response(Id::new("crowded").with(("tab", p)))).map(|r| r.rect).collect();
         assert!(!tabs.is_empty());
+        let mut elided = false;
         for shape in &output.shapes {
+            // Labels are centred in their tab, so an over-wide one still centres on it.
             if let egui::Shape::Text(text) = &shape.shape
                 && text.galley.text().chars().any(char::is_alphabetic)
-                && tabs.iter().any(|t| t.contains(text.pos))
+                && tabs.iter().any(|t| t.contains(text.visual_bounding_rect().center()))
             {
                 let painted = text.visual_bounding_rect();
                 assert!(tabs.iter().any(|t| t.expand(0.5).contains_rect(painted)), "label {:?} overflows its tab", text.galley.text());
+                elided |= text.galley.elided;
             }
         }
+        assert!(elided, "a crowded strip cuts at least one label");
     }
 }
 
