@@ -671,10 +671,11 @@ impl<P: Clone + Eq + Hash + Debug + Send + Sync + 'static> Renderer<'_, P> {
         let policy = (self.permissions)(panel);
         let label = (self.label)(panel);
         let color = if active { self.style.text } else { self.style.inactive_text };
+        // A tab shrunk to fit its strip elides its label with '…'; the padding gives way first.
         let galley = self.content.label(ui, panel, &label, &self.style.font, color).into_galley(
             ui,
-            Some(egui::TextWrapMode::Extend),
-            f32::INFINITY,
+            Some(egui::TextWrapMode::Truncate),
+            (rect.width() - 8.0).max(1.0),
             self.style.font.clone(),
         );
         let response = tabs::Tab::new(self.id.with(("tab", panel)), &label, active)
@@ -685,6 +686,7 @@ impl<P: Clone + Eq + Hash + Debug + Send + Sync + 'static> Renderer<'_, P> {
                 painter.rect_filled(rect, 0.0, if active || response.hovered() { self.style.active_background } else { self.style.tab_background });
                 painter.galley(rect.center() - galley.size() * 0.5, galley.clone(), color);
             });
+        let response = if galley.elided { response.on_hover_text(&label) } else { response };
         self.register_interaction(ui.ctx(), response.id);
         if response.clicked() {
             self.output.actions.push(Action::Activate { panel: panel.clone() });
