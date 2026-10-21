@@ -4,7 +4,7 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use craft_ui::{
-    docking::{Action, DockArea, DockStyle, Floating, Layout, Node, Permissions},
+    docking::{Action, DockArea, DockContent, DockStyle, Floating, Layout, Node, PanelLimits, Permissions},
     layout::{SplitAxis, SplitSize},
 };
 use egui::{Color32, Context, Event, FullOutput, Id, Modifiers, PointerButton, Pos2, RawInput, Rect, Stroke, pos2, vec2};
@@ -258,11 +258,17 @@ fn crowded_tab_labels_are_elided_inside_their_tabs() {
     let layout = Layout { root: Some(Node::Tabs { panels: panels.clone(), active: 0 }), floating: Vec::new() };
     let ctx = Context::default();
     let named = |p: &u32| names.get(*p as usize).copied().unwrap_or("?").to_string();
-    for _ in 0..2 {
+    // Labels as plain text, and as galleys a custom `DockContent` laid out itself.
+    for galleys in [false, false, true, true] {
         let input = RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 200.0))), ..Default::default() };
         let mut output = ctx.run_ui(input, |ui| {
             let style = DockStyle::from_ui(ui);
-            DockArea::new(Id::new("crowded")).show(ui, &layout, &style, named, |_| Permissions::default(), |_, _| {});
+            let area = DockArea::new(Id::new("crowded"));
+            if galleys {
+                area.show_customized(ui, &layout, &style, named, |_| Permissions::default(), |_| PanelLimits::default(), &mut GalleyLabels);
+            } else {
+                area.show(ui, &layout, &style, named, |_| Permissions::default(), |_, _| {});
+            }
         });
         output.textures_delta.clear();
         let tabs: Vec<Rect> = panels.iter().filter_map(|p| ctx.read_response(Id::new("crowded").with(("tab", p)))).map(|r| r.rect).collect();
@@ -276,5 +282,14 @@ fn crowded_tab_labels_are_elided_inside_their_tabs() {
                 assert!(tabs.iter().any(|t| t.expand(0.5).contains_rect(painted)), "label {:?} overflows its tab", text.galley.text());
             }
         }
+    }
+}
+
+struct GalleyLabels;
+
+impl DockContent<u32> for GalleyLabels {
+    fn body(&mut self, _: &mut egui::Ui, _: &u32) {}
+    fn label(&mut self, ui: &egui::Ui, _: &u32, logical: &str, font: &egui::FontId, color: Color32) -> egui::WidgetText {
+        ui.painter().layout_no_wrap(logical.to_owned(), font.clone(), color).into()
     }
 }

@@ -672,12 +672,12 @@ impl<P: Clone + Eq + Hash + Debug + Send + Sync + 'static> Renderer<'_, P> {
         let label = (self.label)(panel);
         let color = if active { self.style.text } else { self.style.inactive_text };
         // A tab shrunk to fit its strip elides its label with '…'; the padding gives way first.
-        let galley = self.content.label(ui, panel, &label, &self.style.font, color).into_galley(
-            ui,
-            Some(egui::TextWrapMode::Truncate),
-            (rect.width() - 8.0).max(1.0),
-            self.style.font.clone(),
-        );
+        let text = match self.content.label(ui, panel, &label, &self.style.font, color) {
+            // `into_galley` returns a laid-out galley as is; lay its job out again so it is cut too.
+            egui::WidgetText::Galley(galley) => egui::WidgetText::LayoutJob(galley.job.clone()),
+            text => text,
+        };
+        let galley = text.into_galley(ui, Some(egui::TextWrapMode::Truncate), (rect.width() - 8.0).max(1.0), self.style.font.clone());
         let response = tabs::Tab::new(self.id.with(("tab", panel)), &label, active)
             .sense(if policy.movable { Sense::click_and_drag() } else { Sense::click() })
             .focus_stroke(Stroke::new(1.0, self.style.accent))
