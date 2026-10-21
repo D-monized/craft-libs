@@ -250,3 +250,31 @@ fn floating_brushes_merge_detach_and_redock_through_real_pointer_input() {
         }
     }
 }
+
+#[test]
+fn crowded_tab_labels_are_elided_inside_their_tabs() {
+    let names = ["Character", "Properties", "Color", "Navigator", "Paragraph", "Brushes"];
+    let panels: Vec<u32> = (0..names.len() as u32).collect();
+    let layout = Layout { root: Some(Node::Tabs { panels: panels.clone(), active: 0 }), floating: Vec::new() };
+    let ctx = Context::default();
+    let named = |p: &u32| names.get(*p as usize).copied().unwrap_or("?").to_string();
+    for _ in 0..2 {
+        let input = RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(300.0, 200.0))), ..Default::default() };
+        let mut output = ctx.run_ui(input, |ui| {
+            let style = DockStyle::from_ui(ui);
+            DockArea::new(Id::new("crowded")).show(ui, &layout, &style, named, |_| Permissions::default(), |_, _| {});
+        });
+        output.textures_delta.clear();
+        let tabs: Vec<Rect> = panels.iter().filter_map(|p| ctx.read_response(Id::new("crowded").with(("tab", p)))).map(|r| r.rect).collect();
+        assert!(!tabs.is_empty());
+        for shape in &output.shapes {
+            if let egui::Shape::Text(text) = &shape.shape
+                && text.galley.text().chars().any(char::is_alphabetic)
+                && tabs.iter().any(|t| t.contains(text.pos))
+            {
+                let painted = text.visual_bounding_rect();
+                assert!(tabs.iter().any(|t| t.expand(0.5).contains_rect(painted)), "label {:?} overflows its tab", text.galley.text());
+            }
+        }
+    }
+}
